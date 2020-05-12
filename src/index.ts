@@ -54,7 +54,7 @@ function nodeContains(compare: AVLComparator, value: any, it: AVLNode) {
 
     while (it) {
         let comparison = compare(value, getValue(it));
-        if (comparison === 0) return true;
+        if (comparison === 0) return getValue(it);
         else if (comparison < 0) it = getLeft(it);
         else it = getRight(it);
     }
