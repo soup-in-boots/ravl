@@ -1,0 +1,27 @@
+{
+  "name": "ravl",
+  "version": "0.1.0",
+  "description": "aRray AVL Implementation",
+  "main": "lib/index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "nyc mocha test"
+  },
+  "author": "Zachary Hueras",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/chai": "^4.2.11",
+    "@types/debug": "^4.1.5",
+    "@types/mocha": "^7.0.2",
+    "@types/node": "^13.13.5",
+    "chai": "^4.2.0",
+    "mocha": "^7.1.2",
+    "nyc": "^15.0.1",
+    "supports-color": "^7.1.0",
+    "typescript": "^3.8.3"
+  }
+}
