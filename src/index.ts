@@ -44,6 +44,10 @@ export function size(tree: AVLTree) {
     return tree[TreeFields.SIZE];
 }
 
+export function get(tree: AVLTree, value: any) {
+    return contains(tree, value);
+}
+
 export function contains([size, options, root]: AVLTree, value: any) {
     let { compare } = options;
     return nodeContains(compare, value, root);
