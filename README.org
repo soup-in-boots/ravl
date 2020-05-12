@@ -1,0 +1,45 @@
+* ravl
+A fast, lightweight AVL tree implementation written typescript.
+
+** Installation
+
+#+begin_src bash
+npm install ravl
+#+end_src
+
+** Usage
+*** Create a tree
+
+#+begin_src javascript
+const avl = require('ravl');
+let a = avl.tree();
+#+end_src
+
+*** Use a custom comparator
+
+#+begin_src javascript
+function compare({key: a}, {key: b}) {
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+}
+
+let a = avl.tree({compare})
+#+end_src
+
+*** Insert elements
+#+begin_src javascript
+a = avl.insert(a, {key: 'a', value: 1});
+a = avl.insert(b, {key: 'b', value: 2});
+#+end_src
+
+*** Test membership, retrieve values
+#+begin_src javascript
+avl.contains(a, {key: 'b'}) // {key: 'a', value: 1}
+avl.contains(a, {key: 'c'}) // false
+#+end_src
+
+** TODO
+*** More APIs
+*** More documentation
+*** Tests

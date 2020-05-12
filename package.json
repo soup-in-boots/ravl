@@ -3,6 +3,8 @@
   "version": "0.1.1",
   "description": "aRray AVL Implementation",
   "main": "lib/index.js",
+  "repository": "https://github.com/fauxsoup/ravl",
+  "homepage": "https://github.com/fauxsoup/ravl#README",
   "directories": {
     "test": "test"
   },
