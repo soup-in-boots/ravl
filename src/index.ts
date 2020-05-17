@@ -2,24 +2,9 @@ import debug from 'debug';
 
 const log = debug('ravl');
 
-const enum TreeFields {
-    SIZE,
-    OPTIONS,
-    ROOT,
-}
-
-const enum NodeFields {
-    VALUE,
-    BALANCE,
-    LEFT,
-    RIGHT
-}
-
-export type AVLNode = [number, any, AVLNode, AVLNode];
-export type AVLTree = [number, AVLOptions, AVLNode];
-export type AVLComparator = (a: any, b: any) => number;
-export type AVLOptions = {
-    compare: AVLComparator,
+export type Comparator<T> = (a: T, b: T) => number;
+export type Options<T> = {
+    compare: Comparator<T>;
 };
 
 export function defaultCompare(a: any, b: any) {
@@ -28,247 +13,291 @@ export function defaultCompare(a: any, b: any) {
     return 0;
 }
 
-export const defaultOptions = {
-    compare: defaultCompare,
-};
+export class Tree<T> {
+    static defaultOptions = {
+        compare: defaultCompare,
+    };
 
-export function tree(options?: AVLOptions): AVLTree {
-    if (!options) {
-        options = defaultOptions;
+    size: number;
+    options: Options<T>;
+    root: Node<T>;
+
+    constructor({
+        options = Tree.defaultOptions,
+        root = null,
+        size = 0,
+    }: Partial<Tree<T>> = {}) {
+        if (!options) {
+            options = Tree.defaultOptions;
+        }
+
+        this.size = size;
+        this.root = root;
+        this.options = options;
     }
 
-    return [0, options, null];
-}
-
-export function size(tree: AVLTree) {
-    return tree[TreeFields.SIZE];
-}
-
-export function get(tree: AVLTree, value: any) {
-    return contains(tree, value);
-}
-
-export function contains([size, options, root]: AVLTree, value: any) {
-    let { compare } = options;
-    return nodeContains(compare, value, root);
-}
-
-function nodeContains(compare: AVLComparator, value: any, it: AVLNode) {
-    if (it === null) return false;
-
-    while (it) {
-        let comparison = compare(value, getValue(it));
-        if (comparison === 0) return getValue(it);
-        else if (comparison < 0) it = getLeft(it);
-        else it = getRight(it);
+    find(value: any) {
+        let { compare } = this.options;
+        return this.root.find(compare, value);
     }
 
-    return false;
-}
+    has(value: any) {
+        return !!this.find(value);
+    }
 
-function node(value: any, balance = 0, left: AVLNode = null, right: AVLNode = null): AVLNode {
-    return [value, balance, left, right];
-}
+    add(value: any): Tree<T> {
+        if (this.size === 0) {
+            const size = this.size + 1;
+            const root = new Node({ value });
+            return new Tree<T>({ ...this, size, root });
+        }
 
-export function insert(tree: AVLTree, insertValue: any) {
-    if (tree[TreeFields.ROOT] === null) {
-        tree[TreeFields.SIZE] += 1;
-        tree[TreeFields.ROOT] = node(insertValue);
+        const { compare } = this.options;
+
+        let stack: [number, Node<T>][] = [];
+        let comparison: number = 0;
+        let it: Node<T> = this.root;
+
+        while (it) {
+            let comparison = compare(value, it.value);
+
+            if (comparison === 0) {
+                // Value already exists; don't insert
+                return this;
+            } else {
+                stack.unshift([comparison, it]);
+
+                if (comparison < 0) {
+                    it = it.left;
+                }
+                if (comparison > 0) {
+                    it = it.right;
+                }
+            }
+        }
+
+        let newNode = new Node<T>({ value });
+        let balanced = false;
+
+        while (stack.length > 0) {
+            [comparison, it] = stack.shift();
+            //let [value, balance, left, right] = it;
+
+            if (comparison < 0) {
+                const left = newNode;
+                let balance = it.balance;
+                if (!balanced) balance -= 1;
+                newNode = new Node<T>({ ...it, left, balance });
+            } else {
+                const right = newNode;
+                let balance = it.balance;
+                if (!balanced) balance += 1;
+                newNode = new Node<T>({ ...it, right, balance });
+            }
+
+            if (newNode.balance === 0) {
+                balanced = true;
+            }
+
+            if (balanced) {
+                continue;
+            }
+
+            if (newNode.balance < -1) {
+                // We're left heavy
+                if (newNode.left.balance === 1)
+                    newNode = new Node<T>({
+                        ...newNode,
+                        left: newNode.left.rotateLeft(),
+                    });
+
+                newNode = newNode.rotateRight();
+                balanced = true;
+            } else if (newNode.balance > 1) {
+                // We're right heavy
+                if (newNode.right.balance === -1)
+                    newNode = new Node<T>({
+                        ...newNode,
+                        right: newNode.right.rotateRight(),
+                    });
+                newNode = newNode.rotateLeft();
+                balanced = true;
+            }
+        }
+
+        const size = this.size + 1;
+        const root = newNode;
+
+        return new Tree({ ...this, size, root });
+    }
+
+    take(value: T) {
+        if (!this.root) return [undefined, this];
+
+        const { compare } = this.options;
+
+        let stack: Array<[number, Node<T>]> = [];
+        let it = this.root;
+        let comparison = 0;
+
+        while (it) {
+            let comparison = compare(value, it.value);
+
+            if (comparison === 0) {
+                break;
+            } else {
+                stack.unshift([comparison, it]);
+
+                if (comparison < 0) {
+                    it = it.left;
+                } else if (comparison > 0) {
+                    it = it.right;
+                }
+            }
+        }
+
+        // If it's null we didn't find the element
+        if (!it) return [undefined, this];
+
+        if (it.left && it.right) {
+            if (it.balance > 0) {
+                // Right heavy, so take from the right side
+                let [left, root] = it.left.takeRightMost();
+            } else {
+                let [right, root] = it.right.takeLeftMost();
+            }
+        }
+    }
+
+    remove(value: T) {
+        const [, tree] = this.take(value);
         return tree;
     }
 
-    let stack: [number, AVLNode][] = [];
-    let comparison: number = 0;
-    let it: AVLNode = tree[TreeFields.ROOT];
+    print() {
+        this.root.print();
+    }
+}
 
-    const { compare } = tree[TreeFields.OPTIONS];
+export class Node<T> {
+    value: any;
+    balance: number;
+    left: Node<T>;
+    right: Node<T>;
 
-    while (it != null) {
-        let [currentValue, balance, left, right] = it;
-        let comparison = compare(insertValue, currentValue);
+    constructor({
+        value = null,
+        balance = 0,
+        left = null,
+        right = null,
+    }: Partial<Node<T>> = {}) {
+        this.value = value;
+        this.balance = balance;
+        this.left = left;
+        this.right = right;
+    }
 
-        if (comparison === 0) {
-            // Value already exists; don't insert
-            return tree;
-        } else {
-            stack.unshift([comparison, it]);
-            if (comparison < 0) {
-                it = left;
+    find(compare: Comparator<T>, value: any) {
+        let it: Node<T> = this;
+
+        while (it) {
+            let comparison = compare(value, it.value);
+            if (comparison === 0) return it.value;
+            else if (comparison < 0) it = it.left;
+            else it = it.right;
+        }
+
+        return false;
+    }
+
+    rotateRight(): Node<T> {
+        log('rotateRight(%o)', this);
+        /**
+         *     A(-2)
+         *    /
+         *   B(-1)
+         *  /
+         * C(0)
+         *
+         *    TO
+         *
+         *    B(0)
+         *   / \
+         *  A(0)C(0)
+         *
+         */
+        let right = null;
+        let root = null;
+
+        {
+            /**
+             * Recompute the balance for the previous root node;
+             * export the new right node. Complete the rotation by
+             * taking on the right side of the new left as our left.
+             */
+            let left = this.left.right;
+
+            let balance = this.balance + 1;
+            if (this.left.balance < 0) {
+                balance -= this.left.balance;
             }
-            if (comparison > 0) {
-                it = right;
-            }
+
+            right = new Node<T>({ ...this, left, balance });
         }
+
+        {
+            /**
+             * Recompute the balance for the new root node;
+             * export the new root node. Use the previously exported
+             * new right node as our right.
+             */
+            let balance = this.left.balance + 1;
+            if (right.balance > 0) balance -= right.balance;
+            root = new Node<T>({ ...this.left, balance, right });
+        }
+
+        return root;
     }
 
-    let newNode = node(insertValue, 0, null, null);
-    let balanced = false;
+    rotateLeft(): Node<T> {
+        log('rotateLeft(%o)', this);
+        /**
+         *    A(2)
+         *     \
+         *      B(1)
+         *       \
+         *        C(0)
+         *
+         *    TO
+         *
+         *    B(0)
+         *   / \
+         *  A(0)C(0)
+         *
+         */
+        let left = null;
+        let root = null;
 
-    while (stack.length > 0) {
-        [comparison, it] = stack.shift();
-        //let [value, balance, left, right] = it;
-
-
-        if (comparison < 0) {
-            newNode = setLeft(it, newNode);
-            if (!balanced) newNode = decrementBalance(newNode);
-        } else {
-            newNode = setRight(it, newNode);
-            if (!balanced) incrementBalance(newNode)
+        {
+            const right = this.right.left;
+            let balance = this.balance - 1;
+            if (this.right.balance > 0) balance -= this.right.balance;
+            left = new Node<T>({ ...this, balance, right });
         }
 
-        const balance = getBalance(newNode);
-        if (balance === 0) {
-            balanced = true;
+        {
+            let balance = this.right.balance - 1;
+            if (left.balance < 0) balance -= left.balance;
+            root = new Node<T>({ ...this.right, balance, left });
         }
 
-        if (balanced) {
-            continue;
-        }
-
-        if (balance < -1) {
-            // We're left heavy
-            if (getBalance(getLeft(newNode)) === 1)
-                newNode = setLeft(newNode, rotateLeft(getLeft(newNode)));
-            newNode = rotateRight(newNode);
-            balanced = true;
-        } else if (balance > 1) {
-            // We're right heavy
-            if (getBalance(getRight(newNode)) === -1)
-                newNode = setRight(newNode, rotateRight(getRight(newNode)));
-            newNode = rotateLeft(newNode);
-            balanced = true;
-        }
+        return root;
     }
 
-    tree[TreeFields.SIZE] += 1;
-    tree[TreeFields.ROOT] = newNode;
-    return tree;
-}
-
-function getValue(node: AVLNode) {
-    return node[NodeFields.VALUE];
-}
-
-function getBalance(node: AVLNode): number {
-    if (node === null) return 0;
-
-    return node[NodeFields.BALANCE];
-}
-
-function getLeft(node: AVLNode) {
-    return node[NodeFields.LEFT];
-}
-
-function setLeft(node: AVLNode, left: AVLNode): AVLNode {
-    node[NodeFields.LEFT] = left;
-    return node;
-}
-
-function getRight(node: AVLNode) {
-    return node[NodeFields.RIGHT];
-}
-
-function setRight(node: AVLNode, right: AVLNode): AVLNode {
-    node[NodeFields.RIGHT] = right;
-    return node;
-}
-
-function rotateRight(node: AVLNode): AVLNode {
-    /**
-     *     A(-2)
-     *    /  
-     *   B(-1)
-     *  /
-     * C(0)
-     *
-     *    TO
-     *
-     *    B(0)
-     *   / \
-     *  A(0)C(0)
-     *
-     */
-    let leftNode = getLeft(node);
-    node = setLeft(node, getRight(leftNode))
-
-    node = incrementBalance(node);
-    const leftBalance = getBalance(leftNode);
-    if (leftBalance < 0)
-        node = incrementBalance(node, leftBalance);
-
-    leftNode = incrementBalance(leftNode);
-    const balance = getBalance(node);
-    if (balance > 0)
-        leftNode = decrementBalance(leftNode, balance);
-
-    leftNode = setRight(leftNode, node);
-
-    return leftNode;
-}
-
-function rotateLeft(node: AVLNode): AVLNode {
-    /**
-     *    A(2)
-     *     \
-     *      B(1)
-     *       \
-     *        C(0)
-     *
-     *    TO
-     *
-     *    B(0)
-     *   / \
-     *  A(0)C(0)
-     *
-     */
-    let rightNode = getRight(node);
-    node = setRight(node, getLeft(rightNode));
-
-    // The parent has rotated left
-    node = decrementBalance(node);
-    const rightBalance = getBalance(rightNode);
-    if (rightBalance > 0) {
-        node = decrementBalance(node, rightBalance);
+    print(depth: number = 0) {
+        if (this.left) this.left.print(depth + 1);
+        const indent = '  '.repeat(depth);
+        console.log('%s%o', indent, this.value);
+        if (this.right) this.right.print(depth + 1);
     }
-
-    rightNode = decrementBalance(rightNode);
-    const balance = getBalance(node);
-    if (balance < 0) {
-        // The original parent is right heavy. That's now our left node, which means we need to
-        // DECREASE our rightBalance factor by the balance factory, which is positive
-        rightNode = decrementBalance(rightNode, balance);
-    }
-
-    rightNode = setLeft(rightNode, node);
-
-    return rightNode;
-}
-
-function incrementBalance(node: AVLNode, amount: number = 1) {
-    node[NodeFields.BALANCE] = node[NodeFields.BALANCE] + amount;
-    return node;
-}
-
-function decrementBalance(node: AVLNode, amount: number = 1) {
-    node[NodeFields.BALANCE] = node[NodeFields.BALANCE] - amount;
-    return node;
-}
-
-
-export function print(tree: AVLTree) {
-    printNodes(tree[TreeFields.ROOT], 0);
-}
-
-function printNodes(node: AVLNode, depth: number) {
-    if (node === null) return;
-
-    printNodes(getLeft(node), depth + 1);
-    printNode(node, depth);
-    printNodes(getRight(node), depth + 1);
-}
-
-function printNode(node: AVLNode, depth: number) {
-    const indent = '  '.repeat(depth);
-    console.log('%s%o', indent, getValue(node));
 }
