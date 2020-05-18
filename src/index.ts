@@ -69,8 +69,7 @@ export class Tree<T> {
 
                 if (comparison < 0) {
                     it = it.left;
-                }
-                if (comparison > 0) {
+                } else if (comparison > 0) {
                     it = it.right;
                 }
             }
@@ -81,48 +80,25 @@ export class Tree<T> {
 
         while (stack.length > 0) {
             [comparison, it] = stack.shift();
-            //let [value, balance, left, right] = it;
 
             if (comparison < 0) {
                 const left = newNode;
-                let balance = it.balance;
-                if (!balanced) balance -= 1;
-                newNode = new Node<T>({ ...it, left, balance });
+                let balanceFactor = it.balanceFactor;
+                if (!balanced) balanceFactor -= 1;
+                newNode = new Node<T>({ ...it, left, balanceFactor });
             } else {
                 const right = newNode;
-                let balance = it.balance;
-                if (!balanced) balance += 1;
-                newNode = new Node<T>({ ...it, right, balance });
+                let balanceFactor = it.balanceFactor;
+                if (!balanced) balanceFactor += 1;
+                newNode = new Node<T>({ ...it, right, balanceFactor });
             }
 
-            if (newNode.balance === 0) {
+            if (newNode.balanceFactor === 0) 
                 balanced = true;
-            }
+            
 
-            if (balanced) {
-                continue;
-            }
-
-            if (newNode.balance < -1) {
-                // We're left heavy
-                if (newNode.left.balance === 1)
-                    newNode = new Node<T>({
-                        ...newNode,
-                        left: newNode.left.rotateLeft(),
-                    });
-
-                newNode = newNode.rotateRight();
-                balanced = true;
-            } else if (newNode.balance > 1) {
-                // We're right heavy
-                if (newNode.right.balance === -1)
-                    newNode = new Node<T>({
-                        ...newNode,
-                        right: newNode.right.rotateRight(),
-                    });
-                newNode = newNode.rotateLeft();
-                balanced = true;
-            }
+            if (!balanced)
+                [newNode, balanced] = newNode.balance();
         }
 
         const size = this.size + 1;
@@ -131,7 +107,7 @@ export class Tree<T> {
         return new Tree({ ...this, size, root });
     }
 
-    take(value: T) {
+    take(value: T): [T, Tree<T>] {
         if (!this.root) return [undefined, this];
 
         const { compare } = this.options;
@@ -158,15 +134,69 @@ export class Tree<T> {
 
         // If it's null we didn't find the element
         if (!it) return [undefined, this];
+        let taken = it;
+
+        log('take() : taken : %o', taken);
 
         if (it.left && it.right) {
-            if (it.balance > 0) {
+            if (it.balanceFactor > 0) {
                 // Right heavy, so take from the right side
-                let [left, root] = it.left.takeRightMost();
+                let [value, left] = it.right.shift();
+                log('take() : it.right.shift() : left.balanceFactor : %d', left.balanceFactor);
+                log('take() : it.right.shift() : it.right.right.balanceFactor : %d', it.right.right.balanceFactor);
+                let balanceFactor = it.right.balanceFactor + 1;
+                it = new Node({value, balanceFactor, right: it.right.right, left});
             } else {
-                let [right, root] = it.right.takeLeftMost();
+                let [value, right] = it.left.pop();
+                let balanceFactor = it.left.balanceFactor + 1;
+                log('take() : it.left.shift() : it.left.left.balanceFactor : %d', it.left.left.balanceFactor);
+                log('take() : it.left.shift() : right.balanceFactor : %d', right.balanceFactor);
+                it = new Node({value, balanceFactor, left: it.left.left, right});
+            }
+        } else if (it.left) {
+            log('take() : it.left : %o', it.left);
+            it = it.left;
+        } else if (it.right) {
+            log('take() : it.right : %o', it.right);
+            it = it.right;
+        } else {
+            it = null;
+        }
+
+        let previous = null
+        let balanced = false;
+        while (stack.length > 0) {
+            previous = it;
+            [comparison, it] = stack.shift()
+
+            if (comparison < 0) {
+                let balanceFactor = it.balanceFactor;
+                if (!balanced) {
+                    balanceFactor +=  1;
+                }
+                it = new Node({...it, balanceFactor, left: previous});
+            } else {
+                let balanceFactor = it.balanceFactor;
+                if (!balanced) {
+                    balanceFactor -=  1;
+                }
+                it = new Node({...it, balanceFactor, right: previous});
+            }
+
+            log('take() : rebuild : pre-balance : %o', it);
+
+            if (!balanced)
+                [it, balanced] = it.balance();
+
+            log('take() : rebuild : post-balance key: value %o', it);
+            if (it.balanceFactor === 1 || it.balanceFactor === -1) {
+                balanced = true;
             }
         }
+
+        let size = this.size - 1;
+        let root = it;
+        return [taken.value, new Tree({...this, size, root})];
     }
 
     remove(value: T) {
@@ -181,18 +211,18 @@ export class Tree<T> {
 
 export class Node<T> {
     value: any;
-    balance: number;
+    balanceFactor: number;
     left: Node<T>;
     right: Node<T>;
 
     constructor({
         value = null,
-        balance = 0,
+        balanceFactor = 0,
         left = null,
         right = null,
     }: Partial<Node<T>> = {}) {
         this.value = value;
-        this.balance = balance;
+        this.balanceFactor = balanceFactor;
         this.left = left;
         this.right = right;
     }
@@ -237,12 +267,12 @@ export class Node<T> {
              */
             let left = this.left.right;
 
-            let balance = this.balance + 1;
-            if (this.left.balance < 0) {
-                balance -= this.left.balance;
+            let balanceFactor = this.balanceFactor + 1;
+            if (this.left.balanceFactor < 0) {
+                balanceFactor -= this.left.balanceFactor;
             }
 
-            right = new Node<T>({ ...this, left, balance });
+            right = new Node<T>({ ...this, left, balanceFactor });
         }
 
         {
@@ -251,16 +281,15 @@ export class Node<T> {
              * export the new root node. Use the previously exported
              * new right node as our right.
              */
-            let balance = this.left.balance + 1;
-            if (right.balance > 0) balance -= right.balance;
-            root = new Node<T>({ ...this.left, balance, right });
+            let balanceFactor = this.left.balanceFactor + 1;
+            if (right.balanceFactor > 0) balanceFactor -= right.balanceFactor;
+            root = new Node<T>({ ...this.left, balanceFactor, right });
         }
 
         return root;
     }
 
     rotateLeft(): Node<T> {
-        log('rotateLeft(%o)', this);
         /**
          *    A(2)
          *     \
