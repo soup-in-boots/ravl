@@ -42,5 +42,6 @@ describe("Tree", function() {
         let tree = new Tree<string>();
 
         expect(tree.add('1')).to.be.an.instanceOf(Tree);
+        expect(tree.remove('1')).to.be.an.instanceOf(Tree);
     });
 })
