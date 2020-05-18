@@ -309,18 +309,123 @@ export class Node<T> {
 
         {
             const right = this.right.left;
-            let balance = this.balance - 1;
-            if (this.right.balance > 0) balance -= this.right.balance;
-            left = new Node<T>({ ...this, balance, right });
+            let balanceFactor = this.balanceFactor - 1;
+            if (this.right.balanceFactor > 0) balanceFactor -= this.right.balanceFactor;
+            left = new Node<T>({ ...this, balanceFactor, right });
+            log('rotateLeft() : left : %o', left);
         }
 
         {
-            let balance = this.right.balance - 1;
-            if (left.balance < 0) balance -= left.balance;
-            root = new Node<T>({ ...this.right, balance, left });
+            let balanceFactor = this.right.balanceFactor - 1;
+            if (left.balanceFactor < 0) balanceFactor -= left.balanceFactor;
+            root = new Node<T>({ ...this.right, balanceFactor, left });
+            log('rotateLeft() : root : %o', root);
         }
 
         return root;
+    }
+
+    shift() {
+        let it: Node<T> = this;
+        let stack: Array<Node<T>> = [];
+
+        while (it.left) {
+            stack.push(it);
+            it = it.left;
+        }
+
+        let popped = it;
+
+        if (it.right) {
+            it = it.right;
+        } else {
+            it = null;
+        }
+
+        let previous = null;
+        let balanced = false;
+        while (stack.length > 0) {
+            previous = it;
+            it = stack.pop();
+
+            let balanceFactor = it.balanceFactor;
+            if (!balanced) balanceFactor += 1;
+            if (balanceFactor === 0) balanced = true;
+            it = new Node({...it, balanceFactor, left: previous});
+            [it, balanced] = it.balance();
+        }
+
+        return [popped.value, it];
+    }
+
+    pop() {
+        let it: Node<T> = this;
+        let stack: Array<Node<T>> = [];
+
+        while (it.right) {
+            stack.push(it);
+            it = it.right;
+        }
+
+        let popped = it;
+
+        if (it.left) {
+            it = it.left;
+        } else {
+            it = null;
+        }
+
+        let previous = null;
+        let balanced = false;
+        while (stack.length > 0) {
+            previous = it;
+            it = stack.pop();
+
+            let balanceFactor = it.balanceFactor;
+            if (!balanced) balanceFactor -= 1;
+            if (balanceFactor === 0) balanced = true;
+            [it, balanced] = new Node({...it, balanceFactor, right: previous}).balance();
+        }
+
+        return [popped.value, it];
+    }
+
+    balance(): [Node<T>, boolean] {
+        let newNode: Node<T> = this;
+        let balanced: boolean = false;
+        log('balance() <- %O', newNode);
+
+        if (newNode.balanceFactor < -1) {
+            // We're left heavy
+            if (newNode.left.balanceFactor === 1) {
+                log('balance() : newNode.left.rotateLeft()');
+                newNode = new Node<T>({
+                    ...newNode,
+                    left: newNode.left.rotateLeft(),
+                });
+            }
+
+            log('balance() : newNode.rotateRight()');
+            newNode = newNode.rotateRight();
+
+            balanced = true;
+        } else if (newNode.balanceFactor > 1) {
+            // We're right heavy
+            if (newNode.right.balanceFactor === -1){
+                log('balance() : newNode.right.rotateRight()');
+                newNode = new Node<T>({
+                    ...newNode,
+                    right: newNode.right.rotateRight(),
+                });
+            }
+            log('balance() : newNode.rotateLeft()');
+            newNode = newNode.rotateLeft();
+
+            balanced = true;
+        }
+
+        log('balance() -> %O', newNode);
+        return [newNode, balanced];
     }
 
     print(depth: number = 0) {
